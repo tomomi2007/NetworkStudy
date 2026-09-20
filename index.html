@@ -1,1 +1,149 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ルーティング・シミュレーター | 情報I</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
 
+<header class="app-header">
+  <h1>🧭 ルーティング・シミュレーター</h1>
+  <p>ルーターのルーティングテーブルを自分で作成し、パケットが宛先まで届く仕組みを確かめよう。</p>
+</header>
+
+<main>
+
+  <!-- ネットワーク構成図エリア -->
+  <section id="topology-panel" aria-label="ネットワーク構成図">
+    <h2>ネットワーク構成図</h2>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 820 480" id="topoSvg" role="img" aria-label="PC1・サーバー1・ルーターA/B/Cのネットワーク構成図">
+
+        <!-- ===== 回線(エッジ) ===== -->
+        <line id="edge-PC1-A" class="edge" x1="75" y1="255" x2="305" y2="137.5"></line>
+        <line id="edge-A-B"   class="edge" x1="305" y1="137.5" x2="305" y2="387.5"></line>
+        <line id="edge-A-C"   class="edge" x1="305" y1="137.5" x2="595" y2="257.5"></line>
+        <line id="edge-B-C"   class="edge" x1="305" y1="387.5" x2="595" y2="257.5"></line>
+        <line id="edge-C-Server1" class="edge" x1="595" y1="257.5" x2="755" y2="255"></line>
+
+        <!-- ===== ネットワークアドレス ラベル ===== -->
+        <text class="net-label" x="150" y="215">192.168.1.0/24</text>
+        <text class="net-label" x="315" y="265">10.0.12.0/24</text>
+        <text class="net-label" x="410" y="185">10.0.13.0/24</text>
+        <text class="net-label" x="410" y="345">10.0.23.0/24</text>
+        <text class="net-label" x="640" y="240">192.168.4.0/24</text>
+
+        <!-- ===== PC1 ===== -->
+        <g id="node-PC1" class="device host">
+          <rect x="20" y="225" width="110" height="60" rx="10"></rect>
+          <text class="dev-title" x="75" y="250">PC1(送信元)</text>
+          <text class="dev-ip" x="75" y="268">192.168.1.10</text>
+        </g>
+
+        <!-- ===== ルーターA ===== -->
+        <g id="node-A" class="device router">
+          <rect x="230" y="90" width="150" height="95" rx="12"></rect>
+          <text class="dev-title" x="305" y="112">ルーターA</text>
+          <text class="dev-if" x="305" y="132">Net1側: 192.168.1.1</text>
+          <text class="dev-if" x="305" y="148">B方向: 10.0.12.1</text>
+          <text class="dev-if" x="305" y="164">C方向: 10.0.13.1</text>
+        </g>
+
+        <!-- ===== ルーターB ===== -->
+        <g id="node-B" class="device router">
+          <rect x="230" y="345" width="150" height="85" rx="12"></rect>
+          <text class="dev-title" x="305" y="367">ルーターB</text>
+          <text class="dev-if" x="305" y="387">A方向: 10.0.12.2</text>
+          <text class="dev-if" x="305" y="403">C方向: 10.0.23.1</text>
+        </g>
+
+        <!-- ===== ルーターC ===== -->
+        <g id="node-C" class="device router">
+          <rect x="520" y="210" width="150" height="95" rx="12"></rect>
+          <text class="dev-title" x="595" y="232">ルーターC</text>
+          <text class="dev-if" x="595" y="252">A方向: 10.0.13.2</text>
+          <text class="dev-if" x="595" y="268">B方向: 10.0.23.2</text>
+          <text class="dev-if" x="595" y="284">Net4側: 192.168.4.1</text>
+        </g>
+
+        <!-- ===== サーバー1 ===== -->
+        <g id="node-Server1" class="device host">
+          <rect x="700" y="225" width="110" height="60" rx="10"></rect>
+          <text class="dev-title" x="755" y="250">サーバー1(宛先)</text>
+          <text class="dev-ip" x="755" y="268">192.168.4.10</text>
+        </g>
+
+        <!-- ===== パケット(封筒アイコン) ===== -->
+        <g id="packet" class="packet" transform="translate(75,255)">
+          <rect x="-17" y="-11" width="34" height="22" rx="3" class="packet-body"></rect>
+          <path d="M -17 -11 L 0 3 L 17 -11" class="packet-flap"></path>
+        </g>
+
+      </svg>
+    </div>
+    <p class="legend">緑の線 = パケットが正常に通過した経路 / ノードの赤点滅 = 破棄・エラー発生箇所</p>
+  </section>
+
+  <div class="lower-grid">
+
+    <!-- ルーティングテーブル設定エリア -->
+    <section id="tables-panel" aria-label="ルーティングテーブル設定">
+      <h2>ルーティングテーブル設定</h2>
+
+      <div class="router-tabs" role="tablist">
+        <button class="tab-btn active" data-router="A" role="tab" aria-selected="true">ルーターA</button>
+        <button class="tab-btn" data-router="B" role="tab" aria-selected="false">ルーターB</button>
+        <button class="tab-btn" data-router="C" role="tab" aria-selected="false">ルーターC</button>
+      </div>
+
+      <table id="rtTable">
+        <thead>
+          <tr>
+            <th>宛先ネットワークアドレス</th>
+            <th>ネクストホップ(IPアドレス)</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="rtBody"></tbody>
+      </table>
+
+      <form id="addRowForm">
+        <input type="text" id="newNet" placeholder="例: 192.168.4.0/24" autocomplete="off">
+        <input type="text" id="newHop" placeholder="例: 10.0.13.2" autocomplete="off">
+        <button type="submit">＋ 追加</button>
+      </form>
+      <p id="formError" class="form-error" role="alert"></p>
+
+      <div class="table-actions">
+        <button type="button" id="clearTableBtn" class="secondary-btn">この表をクリア</button>
+        <button type="button" id="loadModelBtn" class="secondary-btn">モデル解答を読み込む</button>
+      </div>
+      <p class="hint-text">セルをクリックすると直接編集できます。編集後はフォーカスを外すと反映されます。</p>
+    </section>
+
+    <!-- シミュレーション操作・ログエリア -->
+    <section id="sim-panel" aria-label="シミュレーション操作とログ">
+      <h2>シミュレーション</h2>
+      <div class="sim-buttons">
+        <button id="sendBtn" class="primary-btn">📨 パケット送信</button>
+        <button id="resetBtn" class="secondary-btn">表示をリセット</button>
+      </div>
+
+      <div id="resultBanner" class="banner" role="status"></div>
+
+      <h3>ログ</h3>
+      <div id="log" aria-live="polite"><div class="log-line">送信元:PC1、宛先:サーバー1 で「パケット送信」を押してください。</div></div>
+    </section>
+
+  </div>
+</main>
+
+<footer class="app-footer">
+  <p>情報I 学習教材 | ルーティングの仕組みシミュレーター</p>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
