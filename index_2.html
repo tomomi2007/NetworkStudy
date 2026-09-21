@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ルーティング体験シミュレーター | 情報Ⅰ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="app-header">
+  <h1><span class="pkt-icon" aria-hidden="true">📦</span>ルーティング体験シミュレーター</h1>
+  <p class="subtitle">自分がルーターになったつもりで、パケットの通り道を考えよう（情報Ⅰ）</p>
+</header>
+
+<nav class="quicknav" aria-label="ページ内ジャンプ">
+  <button class="quicknav-btn" data-target="sec-howto"><span class="qn-num">①</span>つかいかた</button>
+  <button class="quicknav-btn" data-target="sec-table"><span class="qn-num">②</span>経路表をつくる</button>
+  <button class="quicknav-btn" data-target="sec-sim"><span class="qn-num">③</span>パケットを送る</button>
+  <button class="quicknav-btn" data-target="sec-fault"><span class="qn-num">④</span>回線障害を体験</button>
+</nav>
+
+<main class="split-layout">
+
+  <!-- 左側：常に表示されるトポロジ図 -->
+  <aside class="diagram-pane">
+    <div class="diagram-pane-inner">
+      <h2 class="diagram-title">🌐 ネットワーク構成図</h2>
+      <div id="diagram-mount" class="diagram-mount"></div>
+
+      <div class="router-select" id="router-select">
+        <span class="router-select-label">担当するルーター：</span>
+        <div class="router-chip-group" id="router-chip-group"></div>
+      </div>
+
+      <ul class="legend">
+        <li><span class="legend-swatch router-swatch"></span> ルーター（送り先を判断する機械）</li>
+        <li><span class="legend-swatch network-swatch"></span> ネットワーク（パソコンが集まる部屋）</li>
+        <li><span class="legend-swatch link-swatch"></span> 回線（ルーター同士をつなぐケーブル）</li>
+      </ul>
+    </div>
+  </aside>
+
+  <!-- 右側：説明・操作パネル（スクロールで①〜④が続く） -->
+  <section class="content-pane">
+
+    <div id="sec-howto" class="content-card">
+      <h2><span class="sec-num">①</span> このネットワークの世界</h2>
+      <p>4台の<strong>ルーター（R1〜R4）</strong>が回線でつながり、それぞれに1つの<strong>ネットワーク（A〜D）</strong>がぶら下がっています。実際のIPアドレスの代わりに、<code>A</code>や<code>if1</code>のような記号でネットワークやインターフェース（差込口）を表します。</p>
+      <p>左の図は常に表示されたままなので、右側で経路表を作ったり、パケットを送ったりしながら、いつでも図と見比べることができます。</p>
+      <div class="callout">
+        <strong>ポイント：</strong> R1とR3の間には遠回りせずに行ける「近道（対角線の回線 L5）」があります。この近道があるおかげで、もし他の回線が切れても迂回できることがあります。④で実際に確かめてみましょう。
+      </div>
+    </div>
+
+    <div id="sec-table" class="content-card">
+      <h2><span class="sec-num">②</span> <span id="table-heading">R1 の経路表（ルーティングテーブル）をつくろう</span></h2>
+      <p>あなたは選んだルーターになりきります。他のネットワークにパケットを届けるには、どのインターフェースから、どのルーター（ゲートウェイ）へ送ればよいか、プルダウンで選んで表を完成させましょう。数字が小さいほど近道（メトリック＝ホップ数）です。</p>
+
+      <table class="route-table" id="route-table">
+        <thead>
+          <tr>
+            <th>🎯 宛先ネットワーク</th>
+            <th>🔌 インターフェース</th>
+            <th>🚪 ゲートウェイ</th>
+            <th>📏 メトリック</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="route-table-body">
+        </tbody>
+      </table>
+
+      <div class="table-actions">
+        <button class="btn btn-secondary" id="add-row-btn">＋ 行を追加</button>
+        <button class="btn btn-primary" id="grade-btn">採点する</button>
+        <button class="btn btn-ghost" id="reset-table-btn">この表をリセット</button>
+      </div>
+      <div id="grade-feedback" class="feedback" aria-live="polite"></div>
+    </div>
+
+    <div id="sec-sim" class="content-card">
+      <h2><span class="sec-num">③</span> パケットを送ってみよう</h2>
+      <p>②で作った（すべてのルーターの）経路表を使って、実際にパケットが宛先まで届くかシミュレーションします。左の図の上で、パケットが実際に動く様子が見られます。表が間違っていると、迷子になったりループしたりすることもあります。</p>
+      <div class="sim-controls">
+        <label>送信元ネットワーク
+          <select id="sim-source"></select>
+        </label>
+        <label>宛先ネットワーク
+          <select id="sim-dest"></select>
+        </label>
+        <button class="btn btn-primary" id="sim-send-btn">パケットを送信する ▶</button>
+      </div>
+      <div class="sim-log-wrap">
+        <h3>送信ログ</h3>
+        <ol id="sim-log" class="sim-log"></ol>
+      </div>
+    </div>
+
+    <div id="sec-fault" class="content-card">
+      <h2><span class="sec-num">④</span> 回線を切ってみよう</h2>
+      <p>下のスイッチで回線（L1〜L5）を「切断」すると、その回線を使う経路がすべて使えなくなります。切断すると、その回線を使っていた経路表の行に警告マークが表示されます。<strong>②に戻って経路表を直し</strong>、<strong>③でもう一度パケットを送って</strong>、ちゃんと迂回できるか確かめてみましょう。</p>
+      <div id="link-toggles" class="link-toggles"></div>
+      <div class="callout warn">
+        <strong>体験してほしいこと：</strong> この表は「静的ルーティング（人間が手で決めた経路）」です。実際の回線状態が変わっても、表は自動では直りません。だからこそ、人間（あなた）が気づいて直す必要があります。インターネットの実際のルーターは、この作業を自動で行う「動的ルーティング」という仕組みを使っています。
+      </div>
+    </div>
+
+  </section>
+</main>
+
+<footer class="app-footer">
+  <p>高校情報Ⅰ 学習教材：ルーティングの仕組みを体験的に学ぶシミュレーター</p>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
