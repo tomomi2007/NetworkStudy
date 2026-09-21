@@ -54,20 +54,21 @@
     ],
   };
 
-  // 図の座標 (viewBox 0 0 640 460)
+  // 図の座標 (viewBox 0 0 520 520。正方形に近いレイアウトで左サイドの
+  // 固定パネルに収まりやすくしている)
   const ROUTER_POS = {
-    R1: { x: 210, y: 150 },
-    R2: { x: 430, y: 150 },
-    R3: { x: 430, y: 330 },
-    R4: { x: 210, y: 330 },
+    R1: { x: 170, y: 140 },
+    R2: { x: 350, y: 140 },
+    R3: { x: 350, y: 320 },
+    R4: { x: 170, y: 320 },
   };
   const NET_POS = {
-    A: { x: 90, y: 70 },
-    B: { x: 550, y: 70 },
-    C: { x: 550, y: 410 },
-    D: { x: 90, y: 410 },
+    A: { x: 70, y: 60 },
+    B: { x: 450, y: 60 },
+    C: { x: 450, y: 400 },
+    D: { x: 70, y: 400 },
   };
-  const ROUTER_R = 30;
+  const ROUTER_R = 32;
   const NET_W = 84;
   const NET_H = 44;
 
@@ -150,7 +151,7 @@
   }
 
   /* ------------------------------------------------------------------ *
-   * 4. SVG図の生成
+   * 4. SVG図の生成（常に左側に固定表示される）
    * ------------------------------------------------------------------ */
 
   const SVG_NS = "http://www.w3.org/2000/svg";
@@ -162,12 +163,11 @@
     return el;
   }
 
-  let diagramSvg = null;
   let packetDot = null;
 
   function buildDiagram() {
     const svg = svgEl("svg", {
-      viewBox: "0 0 640 460",
+      viewBox: "0 0 520 520",
       role: "img",
       "aria-label": "ネットワーク構成図",
     });
@@ -222,7 +222,7 @@
           iface.neighborType === "router"
             ? ROUTER_POS[iface.neighborId]
             : NET_POS[iface.neighborId];
-        const frac = 0.3;
+        const frac = 0.32;
         const lx = center.x + (target.x - center.x) * frac;
         const ly = center.y + (target.y - center.y) * frac;
         const txt = svgEl("text", {
@@ -257,15 +257,33 @@
       svg.appendChild(g);
     });
 
-    // --- router nodes ---
+    // --- router nodes（クリックで「担当するルーター」を切り替えられる） ---
     ROUTER_IDS.forEach((routerId) => {
       const p = ROUTER_POS[routerId];
-      const g = svgEl("g", { class: "node-router", id: "router-" + routerId });
+      const g = svgEl("g", {
+        class: "node-router",
+        id: "router-" + routerId,
+        tabindex: "0",
+        role: "button",
+        "aria-label": routerId + " を選択",
+      });
       const circle = svgEl("circle", { cx: p.x, cy: p.y, r: ROUTER_R });
       const text = svgEl("text", { x: p.x, y: p.y });
-      text.textContent = routerId;
+      const tspan1 = svgEl("tspan", { x: p.x, dy: "-0.3em", class: "r-label-small" });
+      tspan1.textContent = "ルーター";
+      const tspan2 = svgEl("tspan", { x: p.x, dy: "1.1em", class: "r-label-big" });
+      tspan2.textContent = routerId;
+      text.appendChild(tspan1);
+      text.appendChild(tspan2);
       g.appendChild(circle);
       g.appendChild(text);
+      g.addEventListener("click", () => selectRouter(routerId));
+      g.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          selectRouter(routerId);
+        }
+      });
       svg.appendChild(g);
     });
 
@@ -279,15 +297,9 @@
     });
     svg.appendChild(packetDot);
 
-    diagramSvg = svg;
+    document.getElementById("diagram-mount").appendChild(svg);
     updateLinkVisuals();
-  }
-
-  function mountDiagram(containerId) {
-    const mount = document.getElementById(containerId);
-    if (mount && diagramSvg && diagramSvg.parentNode !== mount) {
-      mount.appendChild(diagramSvg);
-    }
+    highlightActiveRouter(state.currentRouter);
   }
 
   function updateLinkVisuals() {
@@ -303,7 +315,7 @@
       el.classList.remove("active-path");
     });
     document.querySelectorAll(".node-router").forEach((el) => {
-      el.classList.remove("fail", "active");
+      el.classList.remove("fail");
     });
   }
 
@@ -326,57 +338,64 @@
   }
 
   /* ------------------------------------------------------------------ *
-   * 5. タブ切り替え
+   * 5. ページ内ジャンプナビ（タブではないので、押しても他の内容は隠れない。
+   *    現在見えているセクションに合わせてボタンがハイライトされるだけ）
    * ------------------------------------------------------------------ */
 
-  function initTabs() {
-    const btns = document.querySelectorAll(".tab-btn");
+  function initQuickNav() {
+    const btns = document.querySelectorAll(".quicknav-btn");
     btns.forEach((btn) => {
       btn.addEventListener("click", () => {
-        btns.forEach((b) => {
-          b.classList.remove("active");
-          b.setAttribute("aria-selected", "false");
-        });
-        btn.classList.add("active");
-        btn.setAttribute("aria-selected", "true");
-
-        const tabId = btn.dataset.tab;
-        document.querySelectorAll(".tab-panel").forEach((p) => {
-          p.classList.toggle("active", p.id === tabId);
-        });
-
-        const mountMap = { tab1: "mount-1", tab2: "mount-2", tab3: "mount-3", tab4: "mount-4" };
-        mountDiagram(mountMap[tabId]);
-        clearPathHighlights();
-        if (tabId !== "tab3" && packetDot) packetDot.classList.add("hidden");
-        if (tabId === "tab2") highlightActiveRouter(state.currentRouter);
+        const target = document.getElementById(btn.dataset.target);
+        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     });
+
+    if ("IntersectionObserver" in window) {
+      const sections = Array.from(document.querySelectorAll(".content-card"));
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            const btn = document.querySelector(
+              '.quicknav-btn[data-target="' + entry.target.id + '"]'
+            );
+            if (btn) btn.classList.toggle("in-view", entry.isIntersecting);
+          });
+        },
+        { rootMargin: "-90px 0px -60% 0px", threshold: 0 }
+      );
+      sections.forEach((sec) => observer.observe(sec));
+    }
   }
 
   /* ------------------------------------------------------------------ *
-   * 6. ステップ2：ルーティングテーブル作成
+   * 6. ルーティングテーブル作成
    * ------------------------------------------------------------------ */
 
   function initRouterChips() {
-    const wrap = document.getElementById("router-select-2");
+    const wrap = document.getElementById("router-chip-group");
     ROUTER_IDS.forEach((r) => {
       const chip = document.createElement("button");
       chip.type = "button";
       chip.className = "router-chip" + (r === state.currentRouter ? " active" : "");
       chip.textContent = r;
-      chip.addEventListener("click", () => {
-        state.currentRouter = r;
-        document.querySelectorAll(".router-chip").forEach((c) => c.classList.remove("active"));
-        chip.classList.add("active");
-        document.getElementById("table-heading").textContent =
-          r + " の経路表（ルーティングテーブル）をつくろう";
-        document.getElementById("grade-feedback").classList.remove("show");
-        renderTable(r);
-        highlightActiveRouter(r);
-      });
+      chip.id = "chip-" + r;
+      chip.addEventListener("click", () => selectRouter(r));
       wrap.appendChild(chip);
     });
+  }
+
+  // ルーター図のクリックとチップのクリック、両方から呼ばれる共通処理
+  function selectRouter(routerId) {
+    state.currentRouter = routerId;
+    document.querySelectorAll(".router-chip").forEach((c) => {
+      c.classList.toggle("active", c.id === "chip-" + routerId);
+    });
+    document.getElementById("table-heading").textContent =
+      routerId + " の経路表（ルーティングテーブル）をつくろう";
+    document.getElementById("grade-feedback").classList.remove("show");
+    renderTable(routerId);
+    highlightActiveRouter(routerId);
   }
 
   function usedDestinations(routerId, excludeRowId) {
@@ -617,7 +636,7 @@
   }
 
   /* ------------------------------------------------------------------ *
-   * 7. ステップ3：パケット送信シミュレーション
+   * 7. パケット送信シミュレーション
    * ------------------------------------------------------------------ */
 
   function initSimSelectors() {
@@ -821,7 +840,7 @@
   }
 
   /* ------------------------------------------------------------------ *
-   * 8. ステップ4：回線障害シミュレーション
+   * 8. 回線障害シミュレーション
    * ------------------------------------------------------------------ */
 
   function initLinkToggles() {
@@ -863,9 +882,8 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     buildDiagram();
-    mountDiagram("mount-1");
 
-    initTabs();
+    initQuickNav();
     initRouterChips();
     renderTable(state.currentRouter);
 
